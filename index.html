@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Shadowing & Dictation (Matcha & Pink - Chữ Chạy)</title>
+    <style>
+        /* Bảng màu Matcha & Pink Pastel - Giữ nguyên */
+        :root {
+            --matcha: #9fc088;        
+            --matcha-dark: #7a9c65;   
+            --matcha-bg: #e3eedd;     
+            --pink: #f4c2c2;          
+            --pink-dark: #e6a8a8;     
+            --highlight-pink: #fdf1f1; /* Hồng cực nhạt để làm nổi bật dòng */
+            --text: #4a5c44;          
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--matcha-bg); color: var(--text); max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; color: var(--matcha-dark); text-shadow: 1px 1px 2px rgba(0,0,0,0.05); }
+        
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(159, 192, 136, 0.2); margin-bottom: 20px; border: 1px solid #fff; }
+        
+        .tabs { display: flex; margin-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
+        .tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: #b0b0b0; transition: 0.3s; }
+        .tab.active { color: var(--matcha-dark); border-bottom: 3px solid var(--pink); margin-bottom: -2px; }
+        
+        .input-group { display: none; margin-bottom: 15px; }
+        .input-group.active { display: block; }
+        input[type="text"] { width: 70%; padding: 10px; border: 2px solid var(--matcha); border-radius: 8px; outline: none; color: var(--text); transition: 0.3s; }
+        input[type="text"]:focus { border-color: var(--pink); box-shadow: 0 0 5px rgba(244, 194, 194, 0.5); }
+        
+        .upload-label { display: inline-block; padding: 12px 20px; background-color: var(--matcha-bg); color: var(--matcha-dark); border: 2px dashed var(--matcha-dark); border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; text-align: center; width: 70%; box-sizing: border-box; }
+        .upload-label:hover { background-color: var(--matcha); color: white; border-style: solid; }
+        
+        button { padding: 10px 15px; background-color: var(--matcha); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button:hover { background-color: var(--matcha-dark); transform: translateY(-1px); }
+        button.pink-btn { background-color: var(--pink); color: #fff; }
+        button.pink-btn:hover { background-color: var(--pink-dark); }
+        
+        /* Cấu trúc Player & Transcript mới - Flexbox 2 cột */
+        .shadowing-layout { display: flex; gap: 20px; margin-bottom: 20px; }
+        .player-panel { flex: 1; min-width: 0; } /* Phần video bên trái */
+        .transcript-panel { width: 350px; flex-shrink: 0; display: flex; flex-direction: column; height: auto; } /* Phần chữ bên phải */
+        
+        .player-container { position: relative; width: 100%; padding-bottom: 56.25%; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        #local-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #youtube-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+        
+        /* Kiểu dáng Bảng Bản chép/IPA */
+        .transcript-tabs { justify-content: space-around; }
+        .transcript-tab { font-size: 14px; padding: 8px 15px; color: #b0b0b0; }
+        .transcript-tab.active { color: var(--pink-dark); border-bottom-color: var(--pink); }
+        
+        .transcript-content { flex: 1; overflow-y: auto; padding: 10px; font-size: 14px; line-height: 1.6; color: var(--text); }
+        .transcript-line { padding: 10px; border-bottom: 1px solid #f9fbf8; transition: background-color 0.2s; cursor: pointer; }
+        .transcript-line:hover { background-color: #f7f9f6; }
+        
+        /* Lớp nổi bật khi chữ chạy */
+        .transcript-line.highlight { background-color: var(--highlight-pink); border-radius: 8px; font-weight: bold; color: var(--pink-dark); }
+        .transcript-line.highlight:before { content: "🎙️ "; }
+        
+        .transcript-content .ipa-text { color: var(--matcha-dark); font-style: italic; display: none; }
+        .transcript-content.show-ipa .original-text { display: none; }
+        .transcript-content.show-ipa .ipa-text { display: block; }
+        
+        /* Ẩn dòng note cũ */
+        .note-text { display: none; }
+        
+        .controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .controls select { padding: 10px; font-size: 15px; background-color: var(--matcha); color: white; border: none; border-radius: 8px; cursor: pointer; outline: none; font-weight: bold; }
+        
+        .dictation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .dictation-header h3 { margin: 0; color: var(--matcha-dark); }
+        textarea { width: 100%; height: 180px; padding: 15px; border: 2px solid var(--matcha); border-radius: 12px; font-size: 16px; resize: vertical; outline: none; transition: 0.3s; font-family: inherit; box-sizing: border-box; color: var(--text); line-height: 1.5; }
+        textarea:focus { border-color: var(--pink); box-shadow: 0 0 8px rgba(244, 194, 194, 0.4); }
+    </style>
+</head>
+<body>
+
+    <h1>🍵 Trạm Luyện Shadowing & Dictation 🌸</h1>
+
+    <div class="card">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('youtube')">YouTube</div>
+            <div class="tab" onclick="switchTab('local')">Tải video lên</div>
+        </div>
+
+        <div id="youtube-input" class="input-group active">
+            <input type="text" id="yt-link" placeholder="Dán link YouTube vào đây...">
+            <button onclick="loadYouTubeVideo()">Tải Video</button>
+        </div>
+
+        <div id="local-input" class="input-group">
+            <label for="file-upload" class="upload-label">
+                📁 Nhấn vào đây để chọn video từ máy tính
+            </label>
+            <input type="file" id="file-upload" accept="video/*" onchange="loadLocalVideo(event)" style="display: none;">
+        </div>
+    </div>
+
+    <div class="shadowing-layout">
+        <div class="player-panel card">
+            <div class="player-container">
+                <video id="local-video" style="display: none;"></video>
+                <div id="youtube-wrapper">
+                    <div id="youtube-player"></div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="pink-btn" onclick="seekVideo(-10)">⏪ Lùi 10s</button>
+                <button onclick="togglePlay()">⏯️ Phát / Tạm dừng</button>
+                <button class="pink-btn" onclick="seekVideo(10)">Tua 10s ⏩</button>
+                
+                <select id="speed-control" onchange="changeSpeed()">
+                    <option value="0.5">Tốc độ: 0.5x</option>
+                    <option value="0.75">Tốc độ: 0.75x</option>
+                    <option value="1" selected>Tốc độ: 1.0x</option>
+                    <option value="1.25">Tốc độ: 1.25x</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="transcript-panel card">
+            <div class="tabs transcript-tabs">
+                <div class="tab transcript-tab active" onclick="switchTranscriptTab('text')">Bản chép</div>
+                <div class="tab transcript-tab" onclick="switchTranscriptTab('ipa')">IPA</div>
+            </div>
+            <div id="transcript-container" class="transcript-content">
+                </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="dictation-header">
+            <h3>✍️ Luyện Nghe Chép (Dictation)</h3>
+            <button class="pink-btn" style="padding: 5px 10px; font-size: 13px;" onclick="clearText()">Xóa văn bản</button>
+        </div>
+        <textarea id="dictation-box" placeholder="Nghe và gõ lại những gì bạn nghe được vào đây nhé..."></textarea>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        // --- Dữ liệu mẫu chữ chạy (Dùng cho video Valentine mặc định) ---
+        // Bạn có thể sửa dữ liệu ở đây cho video khác
+        var sampleTranscriptData = [
+            { start: 0.5, end: 3.5, text: 'Little Fox - Kids Stories and Songs', ipa: '/\'lɪtəl fɑːks kɪdz \'stɔːriz ænd sɔːŋz/' },
+            { start: 3.6, end: 6.0, text: 'Culture and History Stories for Kids', ipa: '/\'kʌltʃər ænd \'hɪstəri \'stɔːriz fɔːr kɪdz/' },
+            { start: 6.1, end: 9.0, text: 'Valentine\'s Day Story', ipa: '/ væləntaɪnz deɪ \'stɔːri/' },
+            { start: 9.1, end: 12.0, text: 'culture and history', ipa: '/\'kʌltʃər ænd \'hɪstəri/' },
+            { start: 12.1, end: 14.5, text: 'stories for kids', ipa: '/\'stɔːriz fɔːr kɪdz/' },
+            { start: 14.6, end: 18.0, text: 'Valentine\'s Day Story', ipa: '/ væləntaɪnz deɪ \'stɔːri/' },
+            { start: 18.1, end: 21.5, text: 'Valentine\'s Day', ipa: '/ væləntaɪnz deɪ/' },
+            { start: 22.0, end: 24.5, text: 'It was February 14.', ipa: '/ɪt wʌz \'februeri \'fɔːrtiːnθ/' },
+            { start: 25.0, end: 28.0, text: 'The Carter family was at the store.', ipa: '/ðə \'kɑːrtər \'fæməli wʌz æt ðə stɔːr/' },
+            { start: 28.1, end: 31.0, text: 'They were shopping for cards.', ipa: '/ðeɪ wɜːr \'ʃɑːpɪŋ fɔːr kɑːrdz/' },
+            { start: 31.1, end: 34.0, text: 'Everything was pink or red.', ipa: '/\'evriθɪŋ wʌz pɪŋk ɔːr red/' },
+            { start: 34.1, end: 37.0, text: 'Hearts were everywhere.', ipa: '/hɑːrts wɜːr \'evriweər/' }
+        ];
+
+        // --- Cấu trúc JS tách biệt và bọc thép ---
+        var currentMode = 'youtube'; 
+        var ytPlayer = null;
+        var isYtApiReady = false;
+        var syncTimer = null; // Bộ đếm thời gian đồng bộ hóa YouTube
+
+        function onYouTubeIframeAPIReady() {
+            isYtApiReady = true;
+            // Tải video mẫu ngay khi mở trang
+            setTimeout(function() {
+                loadYouTubeVideo("https://www.youtube.com/watch?v=quo3gkFYjiU");
+            }, 500);
+        }
+
+        // Tải nội dung chữ chạy vào bảng bên phải
+        function loadTranscript(data) {
+            var container = document.getElementById('transcript-container');
+            container.innerHTML = '';
+            for (var i = 0; i < data.length; i++) {
+                var line = data[i];
+                var div = document.createElement('div');
+                div.className = 'transcript-line';
+                div.setAttribute('data-start', line.start);
+                div.setAttribute('data-end', line.end);
+                div.innerHTML = '<span class="original-text">' + line.text + '</span>' +
+                                '<span class="ipa-text">' + line.ipa + '</span>';
+                container.appendChild(div);
+            }
+        }
+
+        // Chuyển đổi tab Bản chép/IPA
+        function switchTranscriptTab(mode) {
+            var tabs = document.querySelectorAll('.transcript-tab');
+            for(var i=0; i<tabs.length; i++) tabs[i].classList.remove('active');
+            var container = document.getElementById('transcript-container');
+            
+            if (mode === 'text') {
+                tabs[0].classList.add('active');
+                container.classList.remove('show-ipa');
+            } else {
+                tabs[1].classList.add('active');
+                container.classList.add('show-ipa');
+            }
+        }
+
+        // Đồng bộ hóa chữ chạy (Hàm cốt lõi)
+        function updateSync(currentTime) {
+            var lines = document.querySelectorAll('.transcript-line');
+            var container = document.getElementById('transcript-container');
+            
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                var start = parseFloat(line.getAttribute('data-start'));
+                var end = parseFloat(line.getAttribute('data-end'));
+                
+                if (currentTime >= start && currentTime < end) {
+                    if (!line.classList.contains('highlight')) {
+                        // Xóa nổi bật cũ
+                        var currentHl = container.querySelector('.transcript-line.highlight');
+                        if (currentHl) currentHl.classList.remove('highlight');
+                        
+                        // Thêm nổi bật mới
+                        line.classList.add('highlight');
+                        
+                        // Tự động cuộn
+                        line.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    return; // Tìm thấy dòng hiện tại rồi thì thôi
+                }
+            }
+        }
+
+        // --- Các hàm điều khiển cũ đã được tối ưu hóa ---
+
+        function switchTab(mode) {
+            currentMode = mode;
+            var tabs = document.getElementsByClassName('tab');
+            for(var i=0; i<tabs.length; i++) tabs[i].classList.remove('active');
+            var inputs = document.getElementsByClassName('input-group');
+            for(var i=0; i<inputs.length; i++) inputs[i].classList.remove('active');
+            
+            var localVid = document.getElementById('local-video');
+            var ytWrap = document.getElementById('youtube-wrapper');
+
+            if (mode === 'youtube') {
+                tabs[0].classList.add('active');
+                document.getElementById('youtube-input').classList.add('active');
+                localVid.style.display = 'none';
+                localVid.pause();
+                stopSyncTimer();
+                ytWrap.style.display = 'block';
+            } else {
+                tabs[1].classList.add('active');
+                document.getElementById('local-input').classList.add('active');
+                ytWrap.style.display = 'none';
+                if(ytPlayer && typeof ytPlayer.pauseVideo === 'function') { ytPlayer.pauseVideo(); stopSyncTimer(); }
+                localVid.style.display = 'block';
+                document.getElementById('transcript-container').innerHTML = ''; // Xóa chữ mẫu khi đổi sang file local
+            }
+        }
+
+        function loadYouTubeVideo(manualUrl) {
+            var url = manualUrl || document.getElementById('yt-link').value;
+            var videoId = extractVideoID(url);
+            
+            if (!videoId) { alert("Link YouTube không hợp lệ!"); return; }
+
+            document.getElementById('youtube-wrapper').style.display = 'block';
+            document.getElementById('local-video').style.display = 'none';
+
+            if (!isYtApiReady) { alert("YouTube chưa sẵn sàng, bấm lại sau 1s."); return; }
+
+            if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+                ytPlayer.loadVideoById(videoId);
+            } else {
+                ytPlayer = new YT.Player('youtube-player', {
+                    height: '100%', width: '100%', videoId: videoId,
+                    playerVars: { 'playsinline': 1 },
+                    events: { 'onStateChange': onPlayerStateChange }
+                });
+            }
+            // Tải dữ liệu chữ chạy mẫu
+            loadTranscript(sampleTranscriptData); 
+        }
+
+        function extractVideoID(url) {
+            var regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            var match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        // --- Xử lý đồng bộ hóa ---
+
+        // YouTube: Cần dùng timer để kiểm tra thời gian
+        function startSyncTimer() {
+            if (!syncTimer) {
+                syncTimer = setInterval(function() {
+                    if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+                        updateSync(ytPlayer.getCurrentTime());
+                    }
+                }, 200); // Kiểm tra mỗi 200ms
+            }
+        }
+
+        function stopSyncTimer() {
+            if (syncTimer) {
+                clearInterval(syncTimer);
+                syncTimer = null;
+            }
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data == YT.PlayerState.PLAYING) {
+                startSyncTimer();
+            } else {
+                stopSyncTimer();
+            }
+        }
+
+        // Local Video: Đơn giản hơn, có sự kiện timeupdate
+        document.getElementById('local-video').addEventListener('timeupdate', function() {
+            updateSync(this.currentTime);
+        });
+
+        function loadLocalVideo(event) {
+            var file = event.target.files[0];
+            if (file) {
+                var url = URL.createObjectURL(file);
+                var localVid = document.getElementById('local-video');
+                localVid.src = url;
+                localVid.style.display = 'block';
+                document.getElementById('youtube-wrapper').style.display = 'none';
+                localVid.play();
+                stopSyncTimer(); // Chắc chắn dừng timer youtube
+                // Chú ý: Cần thêm dữ liệu transcript cụ thể ở đây cho file cục bộ nếu muốn chữ chạy
+                document.getElementById('transcript-container').innerHTML = ''; // Xóa chữ mẫu
+            }
+        }
+
+        function seekVideo(seconds) {
+            if (currentMode === 'local') {
+                var localVid = document.getElementById('local-video');
+                localVid.currentTime = Math.max(0, localVid.currentTime + seconds);
+            } else if (currentMode === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+                ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() + seconds), true);
+            }
+        }
+
+        function togglePlay() {
+            if (currentMode === 'local') {
+                var localVid = document.getElementById('local-video');
+                if (localVid.paused) localVid.play(); else localVid.pause();
+            } else if (currentMode === 'youtube' && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+                var state = ytPlayer.getPlayerState();
+                if (state === 1) { ytPlayer.pauseVideo(); stopSyncTimer(); }
+                else { ytPlayer.playVideo(); startSyncTimer(); }
+            }
+        }
+
+        function changeSpeed() {
+            var speed = parseFloat(document.getElementById('speed-control').value);
+            if (currentMode === 'local') {
+                document.getElementById('local-video').playbackRate = speed;
+            } else if (currentMode === 'youtube' && ytPlayer && typeof ytPlayer.setPlaybackRate === 'function') {
+                ytPlayer.setPlaybackRate(speed);
+            }
+        }
+
+        function clearText() {
+            if(confirm("Bạn có chắc muốn xóa hết đoạn vừa chép không?")) {
+                document.getElementById('dictation-box').value = '';
+            }
+        }
+    </script>
+</body>
+</html>
